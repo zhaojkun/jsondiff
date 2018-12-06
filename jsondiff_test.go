@@ -23,10 +23,13 @@ var cases = []struct {
 	{`{"a": 3.1415}`, `{"a": 3.1415}`, FullMatch},
 	{`{"a": 4213123123}`, `{"a": "4213123123"}`, NoMatch},
 	{`{"a": 4213123123}`, `{"a": 4213123123}`, FullMatch},
+	{`{"a": 4213123123,"fuzz1":1,"fuzz2":12}`, `{"a": 4213123123,"fuzz2":2}`, FullMatch},
 }
 
 func TestCompare(t *testing.T) {
 	opts := DefaultConsoleOptions()
+	opts.IgnoreFields = []string{"fuzz1"}
+	opts.FuzzyFields = []string{"fuzz2"}
 	opts.PrintTypes = false
 	for i, c := range cases {
 		result, _ := Compare([]byte(c.a), []byte(c.b), &opts)

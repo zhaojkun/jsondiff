@@ -43,13 +43,15 @@ type Tag struct {
 }
 
 type Options struct {
-	Normal     Tag
-	Added      Tag
-	Removed    Tag
-	Changed    Tag
-	Prefix     string
-	Indent     string
-	PrintTypes bool
+	Normal       Tag
+	Added        Tag
+	Removed      Tag
+	Changed      Tag
+	Prefix       string
+	Indent       string
+	PrintTypes   bool
+	FuzzyFields  []string
+	IgnoreFields []string
 }
 
 // Provides a set of options that are well suited for console output. Options
@@ -75,11 +77,14 @@ func DefaultHTMLOptions() Options {
 }
 
 type context struct {
-	opts    *Options
-	buf     bytes.Buffer
-	level   int
-	lastTag *Tag
-	diff    Difference
+	opts         *Options
+	buf          bytes.Buffer
+	level        int
+	lastTag      *Tag
+	diff         Difference
+	curKey       string
+	fuzzyFields  map[string]struct{}
+	ignoreFields map[string]struct{}
 }
 
 func (ctx *context) newline(s string) {
@@ -98,6 +103,7 @@ func (ctx *context) newline(s string) {
 }
 
 func (ctx *context) key(k string) {
+	ctx.curKey = k
 	ctx.buf.WriteString(strconv.Quote(k))
 	ctx.buf.WriteString(": ")
 }
@@ -218,8 +224,9 @@ func (ctx *context) printMismatch(a, b interface{}) {
 }
 
 func (ctx *context) printDiff(a, b interface{}) {
+	_, isFuzzy := ctx.fuzzyFields[ctx.curKey]
 	if a == nil || b == nil {
-		if a == nil && b == nil {
+		if isFuzzy || (a == nil && b == nil) {
 			ctx.tag(&ctx.opts.Normal)
 			ctx.writeValue(a, false)
 			ctx.result(FullMatch)
@@ -235,6 +242,12 @@ func (ctx *context) printDiff(a, b interface{}) {
 	if ka != kb {
 		ctx.printMismatch(a, b)
 		ctx.result(NoMatch)
+		return
+	}
+	if isFuzzy {
+		ctx.tag(&ctx.opts.Normal)
+		ctx.writeValue(a, false)
+		ctx.result(FullMatch)
 		return
 	}
 	switch ka {
@@ -320,6 +333,9 @@ func (ctx *context) printDiff(a, b interface{}) {
 			ctx.newline("{")
 		}
 		for i, k := range keys {
+			if _, found := ctx.ignoreFields[k]; found {
+				continue
+			}
 			va, aok := ma[k]
 			vb, bok := mb[k]
 			if aok && bok {
@@ -397,6 +413,14 @@ func Compare(a, b []byte, opts *Options) (Difference, string) {
 	}
 
 	ctx := context{opts: opts}
+	ctx.fuzzyFields = make(map[string]struct{})
+	for _, key := range opts.FuzzyFields {
+		ctx.fuzzyFields[key] = struct{}{}
+	}
+	ctx.ignoreFields = make(map[string]struct{})
+	for _, key := range opts.IgnoreFields {
+		ctx.ignoreFields[key] = struct{}{}
+	}
 	ctx.printDiff(av, bv)
 	if ctx.lastTag != nil {
 		ctx.buf.WriteString(ctx.lastTag.End)
