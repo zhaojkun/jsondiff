@@ -1,6 +1,7 @@
 package jsondiff
 
 import (
+	"log"
 	"testing"
 )
 
@@ -23,7 +24,7 @@ var cases = []struct {
 	{`{"a": 3.1415}`, `{"a": 3.1415}`, FullMatch},
 	{`{"a": 4213123123}`, `{"a": "4213123123"}`, NoMatch},
 	{`{"a": 4213123123}`, `{"a": 4213123123}`, FullMatch},
-	{`{"a": 4213123123,"fuzz1":1,"fuzz2":12}`, `{"a": 4213123123,"fuzz2":2}`, FullMatch},
+	{`{"a": 4213123123,"fuzz1":1,"fuzz2":13,"inner":{"e":"f"}}`, `{"a": 4213123123,"fuzz2":2,"inner":{"e":"f"}}`, FullMatch},
 }
 
 func TestCompare(t *testing.T) {
@@ -32,7 +33,8 @@ func TestCompare(t *testing.T) {
 	opts.FuzzyFields = []string{"fuzz2"}
 	opts.PrintTypes = false
 	for i, c := range cases {
-		result, _ := Compare([]byte(c.a), []byte(c.b), &opts)
+		result, msg := Compare([]byte(c.a), []byte(c.b), &opts)
+		log.Println(msg)
 		if result != c.result {
 			t.Errorf("case %d failed, got: %s, expected: %s", i, result, c.result)
 		}
