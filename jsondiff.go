@@ -43,15 +43,16 @@ type Tag struct {
 }
 
 type Options struct {
-	Normal       Tag
-	Added        Tag
-	Removed      Tag
-	Changed      Tag
-	Prefix       string
-	Indent       string
-	PrintTypes   bool
-	FuzzyFields  []string
-	IgnoreFields []string
+	Normal            Tag
+	Added             Tag
+	Removed           Tag
+	Changed           Tag
+	Prefix            string
+	Indent            string
+	PrintTypes        bool
+	FuzzyFields       []string
+	IgnoreFields      []string
+	StringAsMapFields []string
 }
 
 // Provides a set of options that are well suited for console output. Options
@@ -77,13 +78,14 @@ func DefaultHTMLOptions() Options {
 }
 
 type context struct {
-	opts         *Options
-	level        int
-	lastTag      *Tag
-	diff         Difference
-	curKey       string
-	fuzzyFields  map[string]struct{}
-	ignoreFields map[string]struct{}
+	opts              *Options
+	level             int
+	lastTag           *Tag
+	diff              Difference
+	curKey            string
+	fuzzyFields       map[string]struct{}
+	ignoreFields      map[string]struct{}
+	stringAsMapFields map[string]struct{}
 }
 
 func (ctx *context) newline(buf *bytes.Buffer, s string) {
@@ -222,6 +224,47 @@ func (ctx *context) printMismatch(buf *bytes.Buffer, a, b interface{}) {
 	ctx.writeMismatch(buf, a, b)
 }
 
+func (ctx *context) printStringDiff(buf *bytes.Buffer, aa string, b interface{}) Difference {
+	failedFn := func() Difference {
+		ctx.printMismatch(buf, aa, b)
+		ctx.result(NoMatch)
+		return NoMatch
+	}
+	bb, ok := b.(string)
+	if !ok {
+		return failedFn()
+	}
+	if aa == bb {
+		return FullMatch
+	}
+	_, isStringAsMap := ctx.stringAsMapFields[ctx.curKey]
+	if !isStringAsMap {
+		return failedFn()
+	}
+	diff, msg := Compare([]byte(aa), []byte(bb), ctx.opts)
+	if diff != FullMatch {
+		buf.WriteString(msg)
+		ctx.result(diff)
+		return diff
+	}
+	return FullMatch
+}
+func (ctx *context) isStringDiff(aa string, b interface{}) bool {
+	bb, ok := b.(string)
+	if !ok {
+		return true
+	}
+	if aa == bb {
+		return false
+	}
+	_, isStringAsMap := ctx.stringAsMapFields[ctx.curKey]
+	if !isStringAsMap {
+		return true
+	}
+	diff, _ := Compare([]byte(aa), []byte(bb), &Options{})
+	return diff != FullMatch
+}
+
 func (ctx *context) printDiff(buf *bytes.Buffer, a, b interface{}) Difference {
 	_, isFuzzy := ctx.fuzzyFields[ctx.curKey]
 	if a == nil || b == nil {
@@ -267,11 +310,8 @@ func (ctx *context) printDiff(buf *bytes.Buffer, a, b interface{}) Difference {
 				return NoMatch
 			}
 		case string:
-			bb, ok := b.(string)
-			if !ok || aa != bb {
-				ctx.printMismatch(buf, a, b)
-				ctx.result(NoMatch)
-				return NoMatch
+			if diff := ctx.printStringDiff(buf, aa, b); diff != FullMatch {
+				return diff
 			}
 		}
 	case reflect.Slice:
@@ -436,14 +476,9 @@ func Compare(a, b []byte, opts *Options) (Difference, string) {
 	}
 
 	ctx := context{opts: opts}
-	ctx.fuzzyFields = make(map[string]struct{})
-	for _, key := range opts.FuzzyFields {
-		ctx.fuzzyFields[key] = struct{}{}
-	}
-	ctx.ignoreFields = make(map[string]struct{})
-	for _, key := range opts.IgnoreFields {
-		ctx.ignoreFields[key] = struct{}{}
-	}
+	ctx.fuzzyFields = sliceToSet(opts.FuzzyFields)
+	ctx.ignoreFields = sliceToSet(opts.IgnoreFields)
+	ctx.stringAsMapFields = sliceToSet(opts.StringAsMapFields)
 	var buf bytes.Buffer
 	ctx.printDiff(&buf, av, bv)
 	if ctx.diff == FullMatch {
@@ -453,4 +488,12 @@ func Compare(a, b []byte, opts *Options) (Difference, string) {
 		buf.WriteString(ctx.lastTag.End)
 	}
 	return ctx.diff, buf.String()
+}
+
+func sliceToSet(src []string) map[string]struct{} {
+	m := make(map[string]struct{})
+	for _, k := range src {
+		m[k] = struct{}{}
+	}
+	return m
 }

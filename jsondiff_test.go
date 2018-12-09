@@ -1,6 +1,8 @@
 package jsondiff
 
 import (
+	"fmt"
+	"io/ioutil"
 	"log"
 	"testing"
 )
@@ -25,12 +27,16 @@ var cases = []struct {
 	{`{"a": 4213123123}`, `{"a": "4213123123"}`, NoMatch},
 	{`{"a": 4213123123}`, `{"a": 4213123123}`, FullMatch},
 	{`{"a": 4213123123,"fuzz1":1,"fuzz2":13,"inner":{"e":"f"}}`, `{"a": 4213123123,"fuzz2":2,"inner":{"e":"f"}}`, FullMatch},
+	{`{"stringAsMap":"{\"a\":1,\"b\":2}"}`, `{"stringAsMap":"{\"b\":2,\"a\":1}"}`, FullMatch},
+	{`{"stringAsMap":"{\"a\":1,\"b\":2,\"c\":3}"}`, `{"stringAsMap":"{\"b\":2,\"a\":1}"}`, NoMatch},
+	{`{"stringAsMap":"{\"a\":1,\"b\":2,\"c\":3}"}`, `{"stringAsMap":"{\"b\":2,\"a\":1,\"c\":4}"}`, NoMatch},
 }
 
 func TestCompare(t *testing.T) {
 	opts := DefaultConsoleOptions()
 	opts.IgnoreFields = []string{"fuzz1"}
 	opts.FuzzyFields = []string{"fuzz2"}
+	opts.StringAsMapFields = []string{"stringAsMap"}
 	opts.PrintTypes = false
 	for i, c := range cases {
 		result, msg := Compare([]byte(c.a), []byte(c.b), &opts)
@@ -39,4 +45,14 @@ func TestCompare(t *testing.T) {
 			t.Errorf("case %d failed, got: %s, expected: %s", i, result, c.result)
 		}
 	}
+}
+
+func TestCompareJson(t *testing.T) {
+	buf1, _ := ioutil.ReadFile("data1.json")
+	buf2, _ := ioutil.ReadFile("data2.json")
+	opts := DefaultConsoleOptions()
+	opts.FuzzyFields = []string{"UrlList", "UserCount"}
+	opts.StringAsMapFields = []string{"LinkRawData", "LinkSendData", "log_extra"}
+	_, msg := Compare(buf1, buf2, &opts)
+	fmt.Println(msg)
 }
