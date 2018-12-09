@@ -1,7 +1,6 @@
 package jsondiff
 
 import (
-	"fmt"
 	"io/ioutil"
 	"log"
 	"testing"
@@ -28,8 +27,11 @@ var cases = []struct {
 	{`{"a": 4213123123}`, `{"a": 4213123123}`, FullMatch},
 	{`{"a": 4213123123,"fuzz1":1,"fuzz2":13,"inner":{"e":"f"}}`, `{"a": 4213123123,"fuzz2":2,"inner":{"e":"f"}}`, FullMatch},
 	{`{"stringAsMap":"{\"a\":1,\"b\":2}"}`, `{"stringAsMap":"{\"b\":2,\"a\":1}"}`, FullMatch},
-	{`{"stringAsMap":"{\"a\":1,\"b\":2,\"c\":3}"}`, `{"stringAsMap":"{\"b\":2,\"a\":1}"}`, NoMatch},
+	{`{"stringAsMap":"{\"a\":1,\"b\":2,\"c\":3}"}`, `{"stringAsMap":"{\"b\":2,\"a\":1}"}`, SupersetMatch},
 	{`{"stringAsMap":"{\"a\":1,\"b\":2,\"c\":3}"}`, `{"stringAsMap":"{\"b\":2,\"a\":1,\"c\":4}"}`, NoMatch},
+	{`{}`, `null`, FullMatch},
+	{`{"key":null}`, `{"key":{}}`, FullMatch},
+	{`{"key":null}`, `{}`, SupersetMatch},
 }
 
 func TestCompare(t *testing.T) {
@@ -38,6 +40,7 @@ func TestCompare(t *testing.T) {
 	opts.FuzzyFields = []string{"fuzz2"}
 	opts.StringAsMapFields = []string{"stringAsMap"}
 	opts.PrintTypes = false
+	opts.NullAsEmpty = true
 	for i, c := range cases {
 		result, msg := Compare([]byte(c.a), []byte(c.b), &opts)
 		log.Println(msg)
@@ -54,5 +57,6 @@ func TestCompareJson(t *testing.T) {
 	opts.FuzzyFields = []string{"UrlList", "UserCount"}
 	opts.StringAsMapFields = []string{"LinkRawData", "LinkSendData", "log_extra"}
 	_, msg := Compare(buf1, buf2, &opts)
-	fmt.Println(msg)
+	_ = msg
+	//	fmt.Println(msg)
 }

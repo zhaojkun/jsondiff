@@ -53,6 +53,7 @@ type Options struct {
 	FuzzyFields       []string
 	IgnoreFields      []string
 	StringAsMapFields []string
+	NullAsEmpty       bool
 }
 
 // Provides a set of options that are well suited for console output. Options
@@ -265,10 +266,26 @@ func (ctx *context) isStringDiff(aa string, b interface{}) bool {
 	return diff != FullMatch
 }
 
+func (ctx *context) isZeroLen(a, b interface{}) bool {
+	data := a
+	if data == nil {
+		data = b
+	}
+	sd, ok := data.([]interface{})
+	if ok && len(sd) == 0 {
+		return true
+	}
+	sm, ok := data.(map[string]interface{})
+	if ok && len(sm) == 0 {
+		return true
+	}
+	return false
+}
+
 func (ctx *context) printDiff(buf *bytes.Buffer, a, b interface{}) Difference {
 	_, isFuzzy := ctx.fuzzyFields[ctx.curKey]
 	if a == nil || b == nil {
-		if isFuzzy || (a == nil && b == nil) {
+		if isFuzzy || (a == nil && b == nil) || (ctx.opts.NullAsEmpty && ctx.isZeroLen(a, b)) {
 			ctx.tag(buf, &ctx.opts.Normal)
 			ctx.writeValue(buf, a, false)
 			ctx.result(FullMatch)
